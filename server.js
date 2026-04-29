@@ -6,6 +6,8 @@ const cors = require('cors');
 const { Op } = require('sequelize');
 const ISOcountries = require('i18n-iso-countries');
 ISOcountries.registerLocale(require("i18n-iso-countries/langs/en.json"));
+const authRoutes = require('./routes/authRoute');
+const { User, RefreshToken } = require('./models/user');
 
 const sequelize = require('./config/sequelize');
 const Profile = require('./models/profile');
@@ -15,6 +17,7 @@ require('dotenv').config();
 const app = express();
 app.use(express.json());
 app.use(cors({ origin: '*' }));
+app.use('/api/v1/auth', authRoutes);
 
 /* ---------------- HELPERS ---------------- */
 
@@ -80,7 +83,7 @@ function parseQuery(q) {
     }
 
     // Country
-    const countryMatch = query.match(/from\s+([a-zA-Z]+)/);
+    const countryMatch = query.match(/from\s+([a-zA-Z\s]+)/);
     if (countryMatch) {
         const code = ISOcountries.getAlpha2Code(countryMatch[1], 'en');
         if (code) {
@@ -92,6 +95,7 @@ function parseQuery(q) {
     return { where, interpreted };
 }
 
+app.use('/auth', authRoutes);
 /* ---------------- SEARCH ---------------- */
 app.post('/api/profiles', async (req, res) => {
     try {

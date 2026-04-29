@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const User = require('../model/user')
+const User = require('../models/user')
 const SECRET_KEY = process.env.JWT_SECRET;
 
 const authenticate = (req, res, next) => {
@@ -38,7 +38,7 @@ const authorize = (roles = []) => (req, res, next) => {
     if(req.user.isActive === false) {
         return res.status(403).json({ status: 'error', message: 'Account is inactive.' });
     }
-    
+
     if(!roles.includes(req.user.role)) {
         console.log(req.user.role);
         return res.status(403).json({ error: 'Access denied'});

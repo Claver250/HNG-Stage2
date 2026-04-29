@@ -22,9 +22,12 @@
     "jsonwebtoken": "^9.0.3",
     "morgan": "^1.10.1",
     "nodemon": "^3.1.14",
+    "open": "^11.0.0",
     "passport": "^0.7.0",
     "passport-github2": "^0.1.12",
     "pg": "^8.20.0",
+    "pkce-challenge": "^6.0.0",
+    "route": "^0.2.5",
     "sequelize": "^6.37.8",
     "uuid": "^14.0.0"
   }

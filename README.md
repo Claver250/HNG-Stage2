@@ -1,40 +1,104 @@
-## 🧠 Natural Language Search Engine
-
-The `/api/profiles/search` endpoint implements a custom **Rule-Based Natural Language Processing (NLP)** engine. This allows users to query the database using plain English sentences without the overhead or unpredictability of an LLM.
-
-### 🛠️ How the Logic Works
-The engine processes the input string `q` through three distinct phases:
-
-1.  **Normalization:** The input is converted to lowercase and stripped of special characters to ensure case-insensitive matching.
-2.  **Tokenization & Pattern Matching:** We use **Regular Expressions (Regex)** with word boundaries (`\b`) to identify intent. This prevents "partial matches" (e.g., ensuring the word "email" doesn't accidentally trigger a "male" gender filter).
-3.  **Logical Mapping:** Detected tokens are mapped to Sequelize operators (`Op.gte`, `Op.lte`, `Op.eq`) to build a dynamic `where` clause.
-
-### 🔑 Supported Keywords & Mappings
-
-| Category | Keywords | Logic / Mapping |
-| :--- | :--- | :--- |
-| **Gender** | `male`, `men`, `female`, `women` | `gender = 'male'` or `'female'` |
-| **Age Group** | `child`, `teenager`, `adult`, `senior` | Maps to `age_group` column |
-| **"Young"** | `young` | Custom range: `age BETWEEN 16 AND 24` |
-| **Comparison** | `above`, `over`, `below`, `under` | Captures following digit: `age > X` or `age < X` |
-| **Geography** | `from [Country]`, `in [Country]` | Uses `i18n-iso-countries` to map names to ISO-2 codes (e.g., "Nigeria" → "NG") |
-
-**Example Logic Flow:**
-Query: *"young females from nigeria above 20"*
-1.  `young` → `age >= 16 AND age <= 24`
-2.  `females` → `gender = 'female'`
-3.  `from nigeria` → `country_id = 'NG'`
-4.  `above 20` → `age > 20`
-5.  **Result:** Profiles where `gender='female'`, `country_id='NG'`, and `age` is between 21 and 24.
+Based on your engine's logic—specifically the integration of the **NLP Query Parser**, the **Enrichment Pipeline**, and the **PKCE CLI Flow**—here is a professional, high-standard README for your HNG submission.
 
 ---
 
-### ⚠️ Limitations & Edge Cases
+# 🛡️ SafeGuardian: Intelligence Query & Auth Engine
 
-While the parser is robust for standard queries, it has the following limitations:
+An advanced backend system combining **OAuth 2.0 with PKCE**, **JWT-based session management**, and an **NLP-driven Data Enrichment Pipeline**. Built with **Node.js**, **Express**, and **PostgreSQL (Sequelize)**.
 
-* **No Semantic Context:** The parser cannot distinguish between "not a male" and "is a male." It looks for the presence of keywords regardless of negation.
-* **Ambiguous Geographic Names:** Only official country names and common English aliases are supported. It does not support cities, states, or slang (e.g., "Lagos" or "Naija" will not map to Nigeria).
-* **Complex Conjunctions:** The engine treats all detected filters as an `AND` operation. It does not currently support `OR` logic (e.g., "males from Kenya OR Ghana").
-* **Non-numeric ages:** The parser expects digits for age comparisons. It will not understand "above twenty."
-* **Keyword Overlap:** If a user types "young adult," the system will apply both the "young" (16-24) filter and the "adult" category filter, which may result in a very narrow or empty result set depending on database values.
+---
+
+## 🏗️ System Architecture
+
+The system follows a modular, layered architecture designed for performance and security:
+
+* **API Layer (v1):** Express-based REST API enforcing strict versioning via custom middleware.
+* **Intelligence Layer:** A custom Natural Language Processing (NLP) engine that parses conversational queries into structured SQL logic.
+* **Enrichment Pipeline:** A concurrent fetching mechanism that hydrates user profiles with demographic data from multiple external sources (Agify, Genderize, Nationalize).
+* **Persistence Layer:** PostgreSQL using **UUID v7** for primary keys, providing time-sortable, globally unique identifiers.
+
+---
+
+## 🔐 Authentication Flow
+
+### Web & CLI PKCE Support
+To secure terminal-based logins without exposing a `Client Secret`, the system implements **Proof Key for Code Exchange (PKCE)**:
+
+1.  **CLI Initialization:** Generates a `code_verifier` and `code_challenge`.
+2.  **Handshake:** The CLI opens the browser to the backend; the challenge is stored in the OAuth `state`.
+3.  **Callback & Exchange:** Upon GitHub approval, the backend exchanges the code and redirects the browser to `http://localhost:8080` (the CLI's local listener).
+4.  **Token Delivery:** The terminal "catches" the JWTs from the redirect URL and completes the login.
+
+
+
+---
+
+## 💻 CLI Usage
+
+The system includes a standalone CLI client for developer authentication.
+
+1.  **Start the Backend:** `npm start` (Runs on port 4000).
+2.  **Launch CLI:**
+    ```bash
+    node cli-login.js
+    ```
+3.  **Result:** Your browser will open for GitHub login. Once authorized, your terminal will display your **Access** and **Refresh** tokens.
+
+---
+
+## 🧠 Natural Language Parsing (NLP)
+
+The `/api/profiles/search` endpoint uses a pattern-matching parser to interpret human language.
+
+**Supported Query Examples:**
+* `"young men from Nigeria"` → Filters: `gender: male`, `age: 16-24`, `country: NG`.
+* `"adults above 30 from Germany"` → Filters: `age_group: adult`, `age: >30`, `country: DE`.
+* `"teenagers younger than 18"` → Filters: `age: 13-17`.
+
+**The Logic:**
+1.  **Normalization:** Converts input to lowercase and strips noise.
+2.  **Entity Extraction:** Uses Regex and `i18n-iso-countries` to identify demographics and locations.
+3.  **Sequelize Mapping:** Converts entities into `Sequelize.Op` operators (e.g., `Op.between`, `Op.gt`).
+
+---
+
+## 🎫 Token Handling & Security
+
+| Feature | Implementation |
+| :--- | :--- |
+| **Primary Key** | UUID v7 (Time-ordered) |
+| **Access Token** | JWT (3-minute expiry) |
+| **Refresh Token** | Persistent (5-minute expiry, stored in DB) |
+| **Versioning** | Required `X-API-Version: 1` header |
+| **RBAC** | Role-based enforcement (Analyst by default) |
+
+---
+
+## 🛠️ Enrichment Pipeline Logic
+
+When a new profile is created via `POST /api/profiles`, the system executes a **Concurrent Enrichment Pipeline**:
+
+```javascript
+// Data is fetched in parallel to minimize latency
+const [genderRes, ageRes, nationRes] = await Promise.allSettled([
+    axios.get(genderizeUrl),
+    axios.get(agifyUrl),
+    axios.get(nationalizeUrl)
+]);
+```
+* **Idempotency:** Checks the database for existing names before triggering external API calls.
+* **Probability Scoring:** Only the highest-probability country and gender data are persisted.
+* **Age Grouping:** Dynamically assigns categories (Child, Teenager, Adult, Senior) based on inferred age.
+
+---
+
+## 🚀 Installation & Setup
+
+1.  **Clone the repo** and run `npm install`.
+2.  **Environment Variables:** Create a `.env` file with:
+    * `DATABASE_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`
+    * `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_CALLBACK_URL`
+3.  **Database:** Ensure PostgreSQL is running. The system uses `sequelize.sync({ alter: true })` for automated schema management.
+
+---
+
